@@ -1,0 +1,543 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#1f5a43">
+<title>年間家計簿</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+/* 通帳のような一枚の帳面。上に「今月あと」、下に年間の見通し。下に5つのタブ。 */
+:root{
+  color-scheme:light;
+  --paper:#f4f6f2; --sheet:#ffffff; --ink:#1d2a24; --muted:#5d6b63; --rule:#d9e0da; --field:#f7f9f6;
+  --green:#1f5a43; --green-soft:#e3eee8; --hero:#1f5a43; --gold:#a8822e; --gold-soft:#f4ecd8;
+  --need:#3d6fa3; --fun:#c0623a; --save:#1f5a43; --warn:#b4542e; --bar:rgba(255,255,255,.94);
+  --f-display:"Hiragino Mincho ProN","Yu Mincho","Noto Serif JP",serif;
+  --f-body:"Hiragino Sans","Yu Gothic","Noto Sans JP","Meiryo",sans-serif;
+  --f-num:ui-monospace,"Roboto Mono","SFMono-Regular",Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root{
+  --paper:#111714; --sheet:#18201c; --ink:#e6ece8; --muted:#9aa8a0; --rule:#2b3731; --field:#141b18;
+  --green:#6fbf98; --green-soft:#1d3229; --hero:#1c4535; --gold:#d6b25e; --gold-soft:#332b18;
+  --need:#7fa9d6; --fun:#e2906b; --save:#6fbf98; --warn:#ec8a63; --bar:rgba(24,32,28,.94); color-scheme:dark}}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.6;padding-top:env(safe-area-inset-top,0px)}
+.wrap{max-width:520px;margin:0 auto;padding-block:14px calc(92px + env(safe-area-inset-bottom,0px));padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:14px}
+[hidden]{display:none!important}
+.num{font-family:var(--f-num);font-variant-numeric:tabular-nums}
+h1,h2{font-family:var(--f-display);letter-spacing:.04em;margin:0}
+h1{font-size:1.25rem} h2{font-size:1rem}
+header.top{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap}
+.sub{font-size:.8rem;color:var(--muted)}
+.main{background:var(--hero);color:#fff;border-radius:18px;padding:18px;display:flex;flex-direction:column;gap:10px}
+.main .label{font-size:.8rem;opacity:.85;letter-spacing:.06em}
+.main .big{font-family:var(--f-num);font-weight:600;font-size:2.5rem;line-height:1.05;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.main .row{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;font-size:.85rem}
+.main .row b{font-family:var(--f-num);font-size:1.15rem}
+.meter{height:10px;border-radius:5px;background:rgba(255,255,255,.22);display:flex;overflow:hidden}
+.meter i{display:block;height:100%}
+.legend{display:flex;gap:12px;flex-wrap:wrap;font-size:.75rem}
+.legend > span::before{content:"";display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:4px;background:var(--c)}
+.over{color:#ffd7c4;font-weight:700}
+.sheet{background:var(--sheet);border:1px solid var(--rule);border-radius:14px;padding:12px 16px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.line{display:grid;grid-template-columns:1fr auto;gap:2px 12px;align-items:baseline;padding:8px 0;border-bottom:1px dashed var(--rule)}
+.line:last-child{border-bottom:none}
+.line .v{font-family:var(--f-num);font-weight:600;font-size:1.05rem;white-space:nowrap;font-variant-numeric:tabular-nums}
+.line .s{grid-column:1/-1;font-size:.75rem;color:var(--muted)}
+.line.goal .v{color:var(--green)} .line.warn .v{color:var(--warn)}
+.prog{grid-column:1/-1;height:6px;border-radius:3px;background:var(--green-soft);overflow:hidden}
+.prog i{display:block;height:100%;background:var(--green)}
+.prog.gold{background:var(--gold-soft)} .prog.gold i{background:var(--gold)}
+ul.list{list-style:none;margin:0;padding:0}
+ul.list li{display:grid;grid-template-columns:auto 1fr auto;gap:4px 10px;align-items:center;padding:9px 0;border-bottom:1px dashed var(--rule);font-size:.9rem}
+ul.list li:last-child{border-bottom:none}
+ul.list .d{font-family:var(--f-num);color:var(--muted);font-size:.8rem}
+ul.list .t{min-width:0;overflow-wrap:anywhere}
+ul.list .a{font-family:var(--f-num);font-variant-numeric:tabular-nums;text-align:right}
+ul.list li.tap{cursor:pointer}
+.empty{color:var(--muted);font-size:.85rem;padding:8px 0}
+.chip{font-size:.68rem;font-weight:700;border-radius:999px;padding:1px 8px;margin-left:6px;white-space:nowrap;border:1px solid currentColor}
+.chip.need{color:var(--need)} .chip.fun{color:var(--fun)} .chip.save{color:var(--save)} .chip.yotei{color:var(--gold)} .chip.kari{color:var(--gold)} .chip.jitsu{color:var(--green)}
+form{display:flex;flex-direction:column;gap:10px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+label.f{display:flex;flex-direction:column;gap:3px;font-size:.75rem;color:var(--muted);min-width:0}
+input,select{font:inherit;color:var(--ink);background:var(--field);border:1px solid var(--rule);border-radius:9px;padding:9px 10px;width:100%;min-width:0}
+input[type=number]{font-family:var(--f-num)}
+.seg{display:flex;gap:6px;flex-wrap:wrap}
+.seg button{flex:1 1 0;border:1px solid var(--rule);background:var(--field);color:var(--ink);border-radius:9px;padding:9px 4px;font:inherit;font-size:.85rem;cursor:pointer}
+.seg button[aria-pressed="true"]{border-color:var(--green);background:var(--green-soft);color:var(--green);font-weight:700}
+.btn{border:none;border-radius:10px;padding:11px;font:inherit;font-weight:700;cursor:pointer;background:var(--green);color:#fff}
+@media (prefers-color-scheme: dark){.btn{color:#0e1512}}
+.btn.ghost{background:none;border:1px solid var(--rule);color:var(--ink);font-weight:500}
+.btn.danger{background:none;border:1px solid var(--warn);color:var(--warn)}
+.btn.danger.armed{background:var(--warn);color:#fff}
+.row-btns{display:flex;gap:8px;flex-wrap:wrap}
+.row-btns .btn{flex:1 1 auto}
+.monthnav{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.monthnav button{width:44px;height:44px;border-radius:12px;border:1px solid var(--rule);background:var(--sheet);color:var(--ink);font-size:1.2rem;cursor:pointer}
+.monthnav .mid{text-align:center;flex:1}
+.monthnav .mid b{font-family:var(--f-display);font-size:1.1rem;display:block}
+.totals{display:flex;gap:10px;flex-wrap:wrap;font-size:.8rem;color:var(--muted)}
+.totals span b{color:var(--ink);font-family:var(--f-num)}
+.incrow{display:grid;grid-template-columns:3.2em 1fr auto;gap:8px;align-items:center;padding:6px 0;border-bottom:1px dashed var(--rule)}
+.incrow:last-child{border-bottom:none}
+.incrow .m{font-family:var(--f-num);font-size:.85rem;color:var(--muted)}
+.toggle{border:1px solid currentColor;border-radius:999px;background:none;font:inherit;font-size:.75rem;font-weight:700;padding:5px 10px;cursor:pointer;white-space:nowrap}
+.toggle.kari{color:var(--gold)} .toggle.jitsu{color:var(--green)}
+.note{font-size:.78rem;color:var(--muted);margin:0}
+textarea{font:inherit;font-family:var(--f-num);font-size:.75rem;width:100%;min-height:120px;background:var(--field);color:var(--ink);border:1px solid var(--rule);border-radius:9px;padding:8px}
+.tabbar{position:fixed;left:0;right:0;bottom:0;z-index:20;background:var(--bar);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border-top:1px solid var(--rule);padding-bottom:env(safe-area-inset-bottom,0px);padding-left:env(safe-area-inset-left,0px);padding-right:env(safe-area-inset-right,0px)}
+.tabbar nav{max-width:520px;margin:0 auto;display:grid;grid-template-columns:repeat(5,1fr)}
+.tabbar button{background:none;border:none;font:inherit;color:var(--muted);font-size:.72rem;font-weight:700;padding:9px 2px 8px;display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer}
+.tabbar button[aria-current="page"]{color:var(--green)}
+.tabbar svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;pointer-events:none}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--green);outline-offset:2px}
+#toast{position:fixed;left:50%;bottom:calc(80px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--paper);font-size:.82rem;padding:7px 14px;border-radius:999px;z-index:30;max-width:90vw;text-align:center}
+.banner{background:var(--gold-soft);color:var(--ink);border-radius:12px;padding:10px 12px;font-size:.85rem}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="banner" id="setupBanner" hidden>はじめに「設定」で1年の始まりを、「収入」「固定費」で金額を入れてください。</div>
+
+  <!-- ホーム -->
+  <section data-page="home" class="page" style="display:flex;flex-direction:column;gap:14px">
+    <header class="top"><h1 id="hMonth">—</h1><span class="sub" id="hPeriod"></span></header>
+    <section class="main" aria-label="今月の残り">
+      <span class="label">今月あと使えるお金</span>
+      <div class="big" id="hLeft">—</div>
+      <div class="row"><span>1日あたり</span><span><b id="hPerDay">—</b>（<span id="hDays"></span>）</span></div>
+      <div class="meter" id="hMeter" aria-hidden="true"></div>
+      <div class="legend" id="hLegend"></div>
+      <div class="row" style="opacity:.9"><span>今月の予算</span><span class="num" id="hBudget">—</span></div>
+    </section>
+    <section class="sheet">
+      <h2 id="hYearTitle">今年の蓄財</h2>
+      <div class="line goal"><span>今年回せそうな額（見込み）</span><span class="v" id="hForecast"></span><span class="s" id="hForecastSub"></span></div>
+      <div class="line"><span>今年の目標</span><span class="v" id="hGoal"></span><span class="s" id="hGoalSub"></span></div>
+      <div class="line warn"><span>目標まであと</span><span class="v" id="hToGoal"></span><span class="s" id="hToGoalSub"></span><div class="prog"><i id="hGoalBar"></i></div></div>
+      <div class="line"><span>ボーナスから、あと回す額</span><span class="v" id="hBonusLeft"></span><span class="s" id="hBonusSub"></span><div class="prog gold"><i id="hBonusBar"></i></div></div>
+    </section>
+    <section class="sheet">
+      <h2>今月の先の支出（予定）</h2>
+      <ul class="list" id="hPlan"></ul>
+      <p class="note">今日より後の日付の支出は「予定」として、もう「今月あと」から引いてあります。</p>
+    </section>
+  </section>
+
+  <!-- 支出 -->
+  <section data-page="spend" class="page" hidden style="display:flex;flex-direction:column;gap:14px">
+    <div class="monthnav">
+      <button type="button" id="sPrev" aria-label="前の月">‹</button>
+      <div class="mid"><b id="sMonth">—</b><span class="sub" id="sPeriod"></span></div>
+      <button type="button" id="sNext" aria-label="次の月">›</button>
+    </div>
+    <section class="sheet">
+      <div class="totals" id="sTotals"></div>
+      <ul class="list" id="sList"></ul>
+    </section>
+    <section class="sheet">
+      <h2 id="sFormTitle">支出を入れる</h2>
+      <form id="sForm" autocomplete="off">
+        <div class="grid2">
+          <label class="f">日付<input type="date" id="sDate" required></label>
+          <label class="f">金額（円）<input type="number" id="sAmount" inputmode="numeric" min="1" step="1" required></label>
+        </div>
+        <div class="seg" id="sCat" role="group" aria-label="カテゴリ">
+          <button type="button" data-cat="need" aria-pressed="true">生活必需品</button>
+          <button type="button" data-cat="fun" aria-pressed="false">娯楽費</button>
+          <button type="button" data-cat="save" aria-pressed="false">蓄財</button>
+        </div>
+        <label class="f">メモ<input type="text" id="sMemo" maxlength="60" placeholder="例：スーパー"></label>
+        <div class="row-btns">
+          <button class="btn" type="submit" id="sSubmit">入れる</button>
+          <button class="btn ghost" type="button" id="sCancel" hidden>やめる</button>
+          <button class="btn danger" type="button" id="sDelete" hidden>消す</button>
+        </div>
+        <p class="note">先の予定も、その月のページに入れておけます。入れた項目をタップすると直せます。</p>
+      </form>
+    </section>
+  </section>
+
+  <!-- 収入 -->
+  <section data-page="income" class="page" hidden style="display:flex;flex-direction:column;gap:14px">
+    <header class="top"><h1>収入</h1><span class="sub" id="iTotal"></span></header>
+    <section class="sheet">
+      <h2>毎月の手取り</h2>
+      <p class="note">まだもらっていない月は「仮」、もらったら「実額」に切り替えます。</p>
+      <div id="iSalary"></div>
+    </section>
+    <section class="sheet">
+      <h2>ボーナス</h2>
+      <ul class="list" id="iBonus"></ul>
+      <form id="bForm" autocomplete="off">
+        <div class="grid2">
+          <label class="f">名前<input type="text" id="bName" maxlength="20" placeholder="例：冬のボーナス" required></label>
+          <label class="f">何月分に入るか<select id="bMonth"></select></label>
+        </div>
+        <label class="f">金額（手取り・円）<input type="number" id="bAmount" inputmode="numeric" min="0" step="1" required></label>
+        <div class="row-btns"><button class="btn" type="submit">ボーナスを足す</button></div>
+      </form>
+    </section>
+    <section class="sheet">
+      <h2>ボーナスから蓄財に回した額</h2>
+      <div class="line"><span>回したい額（予定）</span><span class="v" id="iPlan"></span><span class="s">予定は「固定費」の「蓄財の計画」で決めます</span></div>
+      <ul class="list" id="iSaves"></ul>
+      <form id="vForm" autocomplete="off">
+        <div class="grid2">
+          <label class="f">日付<input type="date" id="vDate" required></label>
+          <label class="f">回した額（円）<input type="number" id="vAmount" inputmode="numeric" min="1" step="1" required></label>
+        </div>
+        <div class="row-btns"><button class="btn" type="submit">回した額を入れる</button></div>
+      </form>
+    </section>
+  </section>
+
+  <!-- 固定費 -->
+  <section data-page="fixed" class="page" hidden style="display:flex;flex-direction:column;gap:14px">
+    <header class="top"><h1>固定費</h1><span class="sub" id="fTotal"></span></header>
+    <section class="sheet">
+      <h2>蓄財の計画</h2>
+      <form id="pForm" autocomplete="off">
+        <div class="grid2">
+          <label class="f">毎月の積立ペース（円）<input type="number" id="pPace" inputmode="numeric" min="0" step="1"></label>
+          <label class="f">ボーナスから回したい額（年・円）<input type="number" id="pBonus" inputmode="numeric" min="0" step="1"></label>
+        </div>
+        <p class="note" id="pNote"></p>
+      </form>
+    </section>
+    <section class="sheet">
+      <h2>毎月の固定費（積立は除く）</h2>
+      <ul class="list" id="fMonthly"></ul>
+      <form id="fmForm" autocomplete="off" class="grid2">
+        <label class="f">名前<input type="text" id="fmName" maxlength="20" placeholder="例：家賃" required></label>
+        <label class="f">毎月（円）<input type="number" id="fmAmount" inputmode="numeric" min="0" step="1" required></label>
+        <button class="btn" type="submit" style="grid-column:1/-1">足す</button>
+      </form>
+    </section>
+    <section class="sheet">
+      <h2>年に1回などの固定費</h2>
+      <ul class="list" id="fYearly"></ul>
+      <form id="fyForm" autocomplete="off" class="grid2">
+        <label class="f">名前<input type="text" id="fyName" maxlength="20" placeholder="例：自動車税" required></label>
+        <label class="f">1年分（円）<input type="number" id="fyAmount" inputmode="numeric" min="0" step="1" required></label>
+        <button class="btn" type="submit" style="grid-column:1/-1">足す</button>
+      </form>
+    </section>
+  </section>
+
+  <!-- 設定 -->
+  <section data-page="settings" class="page" hidden style="display:flex;flex-direction:column;gap:14px">
+    <header class="top"><h1>設定</h1></header>
+    <section class="sheet">
+      <h2>1年の始まり</h2>
+      <div class="grid2">
+        <label class="f">年<input type="number" id="cYear" inputmode="numeric" min="2020" max="2100" step="1"></label>
+        <label class="f">始まりの月<select id="cMonth"></select></label>
+      </div>
+      <p class="note" id="cNote"></p>
+    </section>
+    <section class="sheet">
+      <h2>データの保存</h2>
+      <p class="note" id="cPersist"></p>
+      <div class="row-btns">
+        <button class="btn ghost" type="button" id="cExport">書き出す（バックアップ）</button>
+        <label class="btn ghost" style="text-align:center">読み込む<input type="file" id="cImport" accept="application/json,.json" hidden></label>
+      </div>
+      <p class="note">機種変更やスマホの故障に備えて、月に1回くらい書き出しておくと安心です。書き出したファイルは、このアプリの中のデータと同じなので、人に送らないでください。</p>
+      <button class="btn danger" type="button" id="cReset">すべてのデータを消す</button>
+    </section>
+    <p class="note" style="text-align:center">年間家計簿 v1 ・ データはこのスマホの中だけに保存されます</p>
+  </section>
+</div>
+
+<div class="tabbar"><nav aria-label="画面の切り替え">
+  <button type="button" data-go="home" aria-current="page"><svg viewBox="0 0 24 24"><path d="M4 11l8-7 8 7v9H4z"/><path d="M10 20v-6h4v6"/></svg>ホーム</button>
+  <button type="button" data-go="spend"><svg viewBox="0 0 24 24"><rect x="4" y="3.5" width="16" height="17" rx="2"/><path d="M8 9h8M8 13h8M8 17h5"/></svg>支出</button>
+  <button type="button" data-go="income"><svg viewBox="0 0 24 24"><path d="M12 20V4M6 10l6-6 6 6"/></svg>収入</button>
+  <button type="button" data-go="fixed"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>固定費</button>
+  <button type="button" data-go="settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M5.6 18.4L7 17M17 7l1.4-1.4"/></svg>設定</button>
+</nav></div>
+<div id="toast" hidden></div>
+
+<script>
+"use strict";
+/* ---------- 保存（このスマホの中だけ：IndexedDB） ---------- */
+const DB_NAME = "kakeibo", STORE = "kv", KEY = "state";
+function idb(){ return new Promise((res, rej) => { const r = indexedDB.open(DB_NAME, 1); r.onupgradeneeded = () => r.result.createObjectStore(STORE); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); }
+async function loadState(){
+  try { const db = await idb(); return await new Promise((res, rej) => { const q = db.transaction(STORE).objectStore(STORE).get(KEY); q.onsuccess = () => res(q.result || null); q.onerror = () => rej(q.error); }); }
+  catch(e){ try { return JSON.parse(localStorage.getItem("kakeibo-state") || "null"); } catch(_) { return null; } }
+}
+let saveTimer = null;
+function save(){
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(async () => {
+    try { const db = await idb(); db.transaction(STORE, "readwrite").objectStore(STORE).put(S, KEY); }
+    catch(e){ try { localStorage.setItem("kakeibo-state", JSON.stringify(S)); } catch(_) { toast("保存できませんでした"); } }
+  }, 150);
+}
+function fresh(){
+  const t = new Date(), lbl = t.getDate() >= 21 ? (t.getMonth() + 1) % 12 + 1 : t.getMonth() + 1;
+  return { version:1,
+    settings:{ startYear: t.getDate() >= 21 && t.getMonth() === 11 ? t.getFullYear() + 1 : t.getFullYear(), startMonth: lbl, pace:0, bonusSavePlan:0 },
+    salary: Array.from({length:12}, () => ({amount:0, actual:false})),
+    bonuses: [], fixedMonthly: [], fixedYearly: [], expenses: [], bonusSaves: [] };
+}
+let S = null;
+
+/* ---------- 日付と1か月の区切り（前の月の21日〜その月の20日） ---------- */
+const pad = n => String(n).padStart(2, "0");
+const ymd = d => d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
+const parse = s => { const [y, m, d] = s.split("-").map(Number); return new Date(y, m - 1, d); };
+const md = d => (d.getMonth() + 1) + "/" + d.getDate();
+const today0 = () => { const t = new Date(); return new Date(t.getFullYear(), t.getMonth(), t.getDate()); };
+function period(i){ // i = この1年の何か月目か（0〜11）
+  const end = new Date(S.settings.startYear, S.settings.startMonth - 1 + i, 20);
+  const start = new Date(end.getFullYear(), end.getMonth() - 1, 21);
+  return { i, start, end, label: end.getMonth() + 1, year: end.getFullYear() };
+}
+function indexOfDate(d){ // その日が何か月目か。1年の外なら -1 か 12
+  for (let i = 0; i < 12; i++){ const p = period(i); if (d >= p.start && d <= p.end) return i; }
+  return d < period(0).start ? -1 : 12;
+}
+
+/* ---------- 計算 ---------- */
+const sum = (a, f = x => x) => a.reduce((s, x) => s + (Number(f(x)) || 0), 0);
+function calc(){
+  const t = today0(), raw = indexOfDate(t), cur = Math.min(11, Math.max(0, raw));
+  const income = sum(S.salary, x => x.amount) + sum(S.bonuses, x => x.amount);
+  const pace = Number(S.settings.pace) || 0, bPlan = Number(S.settings.bonusSavePlan) || 0;
+  const fixed = (sum(S.fixedMonthly, x => x.amount) + pace) * 12 + sum(S.fixedYearly, x => x.amount);
+  const free = income - fixed - bPlan;
+  const spentIn = i => { const p = period(i); return sum(S.expenses.filter(e => { const d = parse(e.date); return d >= p.start && d <= p.end; }), e => e.amount); };
+  let spentBefore = 0; for (let i = 0; i < cur; i++) spentBefore += spentIn(i);
+  const budget = (free - spentBefore) / (12 - cur);
+  const p = period(cur);
+  const curList = S.expenses.filter(e => { const d = parse(e.date); return d >= p.start && d <= p.end; });
+  const spent = sum(curList, e => e.amount);
+  const left = budget - spent;
+  const from = raw === cur ? t : p.start;
+  const daysLeft = Math.round((p.end - from) / 864e5) + 1;
+  const perDay = left >= 0 ? Math.floor(left / daysLeft) : Math.ceil(left / daysLeft);
+  const yStart = period(0).start, yEnd = period(11).end;
+  const yearSave = S.expenses.filter(e => e.cat === "save" && parse(e.date) >= yStart && parse(e.date) <= yEnd);
+  const extraSave = sum(yearSave, e => e.amount);
+  const extraDone = sum(yearSave.filter(e => parse(e.date) <= t), e => e.amount);
+  const bonusSaved = sum(S.bonusSaves, x => x.amount);
+  const goal = pace * 12 + bPlan;
+  const forecast = goal + extraSave;
+  const monthsDone = raw < 0 ? 0 : raw > 11 ? 12 : cur;   // 20日を過ぎた月の積立は回せたとみなす
+  const done = pace * monthsDone + extraDone + bonusSaved;
+  return { t, raw, cur, p, income, fixed, free, spentBefore, budget, curList, spent, left, daysLeft, perDay, extraSave, bonusSaved, goal, forecast, done,
+    toGoal: Math.max(0, goal - done), bonusLeft: Math.max(0, bPlan - bonusSaved), pace, bPlan, spentIn };
+}
+
+/* ---------- 表示 ---------- */
+const $ = id => document.getElementById(id);
+const yen = n => (n < 0 ? "−¥" : "¥") + Math.abs(Math.round(n)).toLocaleString("ja-JP");
+const CAT = { need:["生活必需品","var(--need)"], fun:["娯楽費","var(--fun)"], save:["蓄財","#ffffff"] };
+const esc = s => String(s == null ? "" : s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+let page = "home", sIndex = 0, editId = null, sCat = "need";
+
+function toast(msg){ const el = $("toast"); el.textContent = msg; el.hidden = false; clearTimeout(window._tt); window._tt = setTimeout(() => el.hidden = true, 2200); }
+
+function render(){
+  const c = calc();
+  $("setupBanner").hidden = c.income > 0;
+  if (page === "home") renderHome(c);
+  if (page === "spend") renderSpend(c);
+  if (page === "income") renderIncome(c);
+  if (page === "fixed") renderFixed(c);
+  if (page === "settings") renderSettings(c);
+}
+function renderHome(c){
+  $("hMonth").textContent = c.p.label + "月分";
+  $("hPeriod").textContent = md(c.p.start) + "〜" + md(c.p.end) + "（今日 " + md(c.t) + "）" + (c.raw < 0 ? "・1年の始まり前" : c.raw > 11 ? "・1年が終わりました" : "");
+  $("hLeft").textContent = yen(c.left);
+  $("hLeft").classList.toggle("over", c.left < 0);
+  $("hPerDay").textContent = yen(c.perDay);
+  $("hDays").textContent = "あと" + c.daysLeft + "日";
+  $("hBudget").textContent = yen(c.budget);
+  const by = {need:0, fun:0, save:0}; c.curList.forEach(e => by[e.cat] = (by[e.cat] || 0) + Number(e.amount));
+  const base = Math.max(c.budget, c.spent, 1);
+  $("hMeter").innerHTML = Object.keys(by).map(k => `<i style="width:${by[k] / base * 100}%;background:${CAT[k][1]};opacity:${k === "save" ? .85 : 1}"></i>`).join("");
+  $("hLegend").innerHTML = Object.keys(by).map(k => `<span style="--c:${CAT[k][1]}">${CAT[k][0]} <span class="num">${yen(by[k])}</span></span>`).join("");
+  $("hYearTitle").textContent = "今年の蓄財（" + period(0).label + "月分〜" + (period(11).year !== period(0).year ? "翌年" : "") + period(11).label + "月分）";
+  $("hForecast").textContent = yen(c.forecast);
+  $("hForecastSub").textContent = "毎月の積立 " + yen(c.pace) + "×12 ＋ ボーナスから " + yen(c.bPlan) + " ＋ 追加の蓄財 " + yen(c.extraSave);
+  $("hGoal").textContent = yen(c.goal);
+  $("hGoalSub").textContent = "毎月 " + yen(c.pace) + " ペース×12 ＋ ボーナスから " + yen(c.bPlan);
+  $("hToGoal").textContent = yen(c.toGoal);
+  $("hToGoalSub").textContent = "これまでに回せた額 " + yen(c.done) + (c.goal ? "（" + Math.round(c.done / c.goal * 100) + "%）" : "");
+  $("hGoalBar").style.width = (c.goal ? Math.min(100, c.done / c.goal * 100) : 0) + "%";
+  $("hBonusLeft").textContent = yen(c.bonusLeft);
+  const nb = S.bonuses.filter(b => !b.actual)[0];
+  $("hBonusSub").textContent = "予定 " + yen(c.bPlan) + " ／ 回した額 " + yen(c.bonusSaved) + (nb ? "（次は" + nb.name + "）" : "");
+  $("hBonusBar").style.width = (c.bPlan ? Math.min(100, c.bonusSaved / c.bPlan * 100) : 0) + "%";
+  const plans = c.curList.filter(e => parse(e.date) > c.t).sort((a, b) => a.date < b.date ? -1 : 1);
+  $("hPlan").innerHTML = plans.length ? plans.map(e => `<li><span class="d">${md(parse(e.date))}</span><span class="t">${esc(e.memo || "（メモなし）")}<span class="chip ${e.cat}">${CAT[e.cat][0]}</span></span><span class="a">${yen(e.amount)}</span></li>`).join("") : `<li class="empty" style="display:block">今月の予定はありません</li>`;
+}
+function renderSpend(c){
+  const p = period(sIndex);
+  $("sMonth").textContent = p.label + "月分";
+  $("sPeriod").textContent = md(p.start) + "〜" + md(p.end);
+  $("sPrev").disabled = sIndex === 0; $("sNext").disabled = sIndex === 11;
+  const list = S.expenses.filter(e => { const d = parse(e.date); return d >= p.start && d <= p.end; }).sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : 0);
+  const by = {need:0, fun:0, save:0}; list.forEach(e => by[e.cat] += Number(e.amount));
+  let budgetTxt = "";
+  if (sIndex === c.cur) budgetTxt = `<span>予算 <b>${yen(c.budget)}</b></span><span>あと <b>${yen(c.left)}</b></span>`;
+  else if (sIndex > c.cur) budgetTxt = `<span>予算の見込み <b>${yen((c.free - c.spentBefore - c.spent) / (11 - c.cur))}</b></span>`;
+  $("sTotals").innerHTML = `<span>合計 <b>${yen(sum(list, e => e.amount))}</b></span>` + Object.keys(by).map(k => `<span>${CAT[k][0]} <b>${yen(by[k])}</b></span>`).join("") + budgetTxt;
+  const t = c.t;
+  $("sList").innerHTML = list.length ? list.map(e => `<li class="tap" data-id="${e.id}" tabindex="0"><span class="d">${md(parse(e.date))}</span><span class="t">${esc(e.memo || "（メモなし）")}<span class="chip ${e.cat}">${CAT[e.cat][0]}</span>${parse(e.date) > t ? '<span class="chip yotei">予定</span>' : ""}</span><span class="a">${yen(e.amount)}</span></li>`).join("") : `<li class="empty" style="display:block">この月の支出はまだありません</li>`;
+  if (!editId){
+    const d = $("sDate");
+    if (!d.value || parse(d.value) < p.start || parse(d.value) > p.end) d.value = ymd(t >= p.start && t <= p.end ? t : p.start);
+  }
+}
+function renderIncome(c){
+  $("iTotal").textContent = "年間 " + yen(c.income);
+  $("iSalary").innerHTML = S.salary.map((s, i) => { const p = period(i); return `<div class="incrow"><span class="m">${p.label}月分</span><input type="number" inputmode="numeric" min="0" step="1" id="sal${i}" data-sal="${i}" value="${s.amount || ""}" aria-label="${p.label}月分の手取り"><button type="button" class="toggle ${s.actual ? "jitsu" : "kari"}" data-salt="${i}">${s.actual ? "実額" : "仮"}</button></div>`; }).join("");
+  const opts = Array.from({length:12}, (_, i) => `<option value="${i}">${period(i).label}月分</option>`).join("");
+  if ($("bMonth").options.length !== 12) $("bMonth").innerHTML = opts;
+  $("iBonus").innerHTML = S.bonuses.length ? S.bonuses.slice().sort((a, b) => a.idx - b.idx).map(b => `<li><span class="d">${period(b.idx).label}月分</span><span class="t">${esc(b.name)}</span><span class="a">${yen(b.amount)}<br><button type="button" class="toggle ${b.actual ? "jitsu" : "kari"}" data-bt="${b.id}">${b.actual ? "実額" : "仮"}</button> <button type="button" class="toggle" style="color:var(--warn)" data-bdel="${b.id}">${armed === "b" + b.id ? "本当に消す" : "消す"}</button></span></li>`).join("") : `<li class="empty" style="display:block">ボーナスはまだありません</li>`;
+  $("iPlan").textContent = yen(c.bPlan);
+  $("iSaves").innerHTML = S.bonusSaves.length ? S.bonusSaves.slice().sort((a, b) => a.date < b.date ? -1 : 1).map(v => `<li><span class="d">${md(parse(v.date))}</span><span class="t">ボーナスから蓄財</span><span class="a">${yen(v.amount)} <button type="button" class="toggle" style="color:var(--warn)" data-vdel="${v.id}">${armed === "v" + v.id ? "本当に消す" : "消す"}</button></span></li>`).join("") + `<li><span></span><span class="t"><b>合計／あと</b></span><span class="a">${yen(c.bonusSaved)} ／ ${yen(c.bonusLeft)}</span></li>` : `<li class="empty" style="display:block">まだ入れていません（あと ${yen(c.bonusLeft)}）</li>`;
+  if (!$("vDate").value) $("vDate").value = ymd(c.t);
+}
+function renderFixed(c){
+  $("fTotal").textContent = "年間 " + yen(c.fixed) + "（積立を含む）";
+  if (document.activeElement !== $("pPace")) $("pPace").value = S.settings.pace || "";
+  if (document.activeElement !== $("pBonus")) $("pBonus").value = S.settings.bonusSavePlan || "";
+  $("pNote").textContent = "今年の目標 ＝ " + yen(c.pace) + "×12 ＋ " + yen(c.bPlan) + " ＝ " + yen(c.goal) + "。毎月の積立は固定費として予算から先に引きます。";
+  const row = (x, kind) => `<li><span class="d"></span><span class="t">${esc(x.name)}</span><span class="a">${yen(x.amount)} <button type="button" class="toggle" style="color:var(--warn)" data-fdel="${kind}:${x.id}">${armed === kind + x.id ? "本当に消す" : "消す"}</button></span></li>`;
+  $("fMonthly").innerHTML = (S.fixedMonthly.length ? S.fixedMonthly.map(x => row(x, "m")).join("") : `<li class="empty" style="display:block">まだありません</li>`) + `<li><span></span><span class="t"><b>毎月の合計（積立を含む）</b></span><span class="a">${yen(sum(S.fixedMonthly, x => x.amount) + c.pace)}</span></li>`;
+  $("fYearly").innerHTML = S.fixedYearly.length ? S.fixedYearly.map(x => row(x, "y")).join("") : `<li class="empty" style="display:block">まだありません</li>`;
+}
+function renderSettings(c){
+  if (document.activeElement !== $("cYear")) $("cYear").value = S.settings.startYear;
+  if ($("cMonth").options.length !== 12) $("cMonth").innerHTML = Array.from({length:12}, (_, i) => `<option value="${i + 1}">${i + 1}月分から</option>`).join("");
+  $("cMonth").value = S.settings.startMonth;
+  const a = period(0), b = period(11);
+  $("cNote").textContent = "この1年：" + a.year + "年" + a.label + "月分（" + ymd(a.start) + "から）〜 " + b.year + "年" + b.label + "月分（" + ymd(b.end) + "まで）。1か月は前の月の21日〜その月の20日です。";
+  if (navigator.storage && navigator.storage.persisted) navigator.storage.persisted().then(ok => { $("cPersist").textContent = ok ? "データは「消えにくい保存」になっています。" : "データはふつうの保存です。ホーム画面に追加すると「消えにくい保存」になりやすくなります。"; });
+  $("cReset").textContent = armed === "reset" ? "本当に消す（元に戻せません）" : "すべてのデータを消す";
+  $("cReset").classList.toggle("armed", armed === "reset");
+}
+
+/* ---------- 操作 ---------- */
+let armed = null;
+function go(name){
+  page = name; armed = null;
+  document.querySelectorAll(".page").forEach(p => p.hidden = p.dataset.page !== name);
+  document.querySelectorAll(".tabbar button").forEach(b => b.dataset.go === name ? b.setAttribute("aria-current", "page") : b.removeAttribute("aria-current"));
+  if (name === "spend"){ sIndex = calc().cur; resetForm(); }
+  render(); window.scrollTo(0, 0);
+}
+document.querySelectorAll(".tabbar button").forEach(b => b.addEventListener("click", () => go(b.dataset.go)));
+
+// 支出
+$("sPrev").addEventListener("click", () => { if (sIndex > 0){ sIndex--; resetForm(); render(); } });
+$("sNext").addEventListener("click", () => { if (sIndex < 11){ sIndex++; resetForm(); render(); } });
+$("sCat").addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return; sCat = b.dataset.cat; setCat(); });
+function setCat(){ document.querySelectorAll("#sCat button").forEach(b => b.setAttribute("aria-pressed", b.dataset.cat === sCat ? "true" : "false")); }
+function resetForm(){ editId = null; $("sAmount").value = ""; $("sMemo").value = ""; $("sDate").value = ""; sCat = "need"; setCat(); $("sFormTitle").textContent = "支出を入れる"; $("sSubmit").textContent = "入れる"; $("sCancel").hidden = true; $("sDelete").hidden = true; $("sDelete").classList.remove("armed"); $("sDelete").textContent = "消す"; }
+$("sList").addEventListener("click", e => {
+  const li = e.target.closest("li[data-id]"); if (!li) return;
+  const x = S.expenses.find(v => v.id === li.dataset.id); if (!x) return;
+  editId = x.id; $("sDate").value = x.date; $("sAmount").value = x.amount; $("sMemo").value = x.memo || ""; sCat = x.cat; setCat();
+  $("sFormTitle").textContent = "支出を直す"; $("sSubmit").textContent = "直す"; $("sCancel").hidden = false; $("sDelete").hidden = false;
+  $("sForm").scrollIntoView({behavior:"smooth", block:"center"});
+});
+$("sCancel").addEventListener("click", () => { resetForm(); render(); });
+$("sDelete").addEventListener("click", () => {
+  const b = $("sDelete");
+  if (!b.classList.contains("armed")){ b.classList.add("armed"); b.textContent = "本当に消す"; return; }
+  S.expenses = S.expenses.filter(v => v.id !== editId); save(); resetForm(); render(); toast("消しました");
+});
+$("sForm").addEventListener("submit", e => {
+  e.preventDefault();
+  const amount = Math.round(Number($("sAmount").value)), date = $("sDate").value;
+  if (!date || !(amount > 0)){ toast("日付と金額を入れてください"); return; }
+  const rec = { date, amount, cat: sCat, memo: $("sMemo").value.trim() };
+  if (editId){ Object.assign(S.expenses.find(v => v.id === editId), rec); toast("直しました"); }
+  else { S.expenses.push(Object.assign({ id: uid() }, rec)); toast("入れました"); }
+  const i = indexOfDate(parse(date)); if (i >= 0 && i <= 11) sIndex = i;
+  save(); resetForm(); render();
+});
+
+// 収入
+$("iSalary").addEventListener("input", e => { const i = e.target.dataset.sal; if (i == null) return; S.salary[i].amount = Math.max(0, Math.round(Number(e.target.value) || 0)); save(); $("iTotal").textContent = "年間 " + yen(calc().income); });
+$("iSalary").addEventListener("click", e => { const i = e.target.dataset.salt; if (i == null) return; S.salary[i].actual = !S.salary[i].actual; save(); render(); });
+$("bForm").addEventListener("submit", e => {
+  e.preventDefault();
+  const amount = Math.round(Number($("bAmount").value));
+  if (!$("bName").value.trim() || !(amount >= 0)){ toast("名前と金額を入れてください"); return; }
+  S.bonuses.push({ id: uid(), name: $("bName").value.trim(), idx: Number($("bMonth").value), amount, actual:false });
+  $("bName").value = ""; $("bAmount").value = ""; save(); render(); toast("ボーナスを足しました");
+});
+$("iBonus").addEventListener("click", e => {
+  const t = e.target.dataset.bt, d = e.target.dataset.bdel;
+  if (t){ const b = S.bonuses.find(x => x.id === t); b.actual = !b.actual; save(); render(); }
+  if (d){ if (armed === "b" + d){ S.bonuses = S.bonuses.filter(x => x.id !== d); armed = null; save(); toast("消しました"); } else armed = "b" + d; render(); }
+});
+$("vForm").addEventListener("submit", e => {
+  e.preventDefault();
+  const amount = Math.round(Number($("vAmount").value));
+  if (!$("vDate").value || !(amount > 0)){ toast("日付と金額を入れてください"); return; }
+  S.bonusSaves.push({ id: uid(), date: $("vDate").value, amount }); $("vAmount").value = ""; save(); render(); toast("入れました");
+});
+$("iSaves").addEventListener("click", e => { const d = e.target.dataset.vdel; if (!d) return; if (armed === "v" + d){ S.bonusSaves = S.bonusSaves.filter(x => x.id !== d); armed = null; save(); toast("消しました"); } else armed = "v" + d; render(); });
+
+// 固定費
+$("pPace").addEventListener("input", e => { S.settings.pace = Math.max(0, Math.round(Number(e.target.value) || 0)); save(); render(); });
+$("pBonus").addEventListener("input", e => { S.settings.bonusSavePlan = Math.max(0, Math.round(Number(e.target.value) || 0)); save(); render(); });
+function addFixed(listName, nameId, amtId){
+  const name = $(nameId).value.trim(), amount = Math.round(Number($(amtId).value));
+  if (!name || !(amount >= 0)){ toast("名前と金額を入れてください"); return; }
+  S[listName].push({ id: uid(), name, amount }); $(nameId).value = ""; $(amtId).value = ""; save(); render(); toast("足しました");
+}
+$("fmForm").addEventListener("submit", e => { e.preventDefault(); addFixed("fixedMonthly", "fmName", "fmAmount"); });
+$("fyForm").addEventListener("submit", e => { e.preventDefault(); addFixed("fixedYearly", "fyName", "fyAmount"); });
+document.querySelector('[data-page="fixed"]').addEventListener("click", e => {
+  const v = e.target.dataset.fdel; if (!v) return;
+  const [kind, id] = v.split(":");
+  if (armed === kind + id){ const L = kind === "m" ? "fixedMonthly" : "fixedYearly"; S[L] = S[L].filter(x => x.id !== id); armed = null; save(); toast("消しました"); } else armed = kind + id;
+  render();
+});
+
+// 設定
+$("cYear").addEventListener("change", e => { const y = Math.round(Number(e.target.value)); if (y >= 2020 && y <= 2100){ S.settings.startYear = y; save(); render(); } });
+$("cMonth").addEventListener("change", e => { S.settings.startMonth = Number(e.target.value); save(); render(); });
+$("cExport").addEventListener("click", () => {
+  const blob = new Blob([JSON.stringify(S, null, 1)], { type: "application/json" });
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "kakeibo-backup-" + ymd(new Date()) + ".json";
+  document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000); toast("書き出しました");
+});
+$("cImport").addEventListener("change", e => {
+  const f = e.target.files[0]; if (!f) return;
+  const r = new FileReader();
+  r.onload = () => { try { const d = JSON.parse(r.result); if (!d || !d.settings || !Array.isArray(d.salary)) throw 0; S = Object.assign(fresh(), d); save(); render(); toast("読み込みました"); } catch(_){ toast("このファイルは読み込めませんでした"); } e.target.value = ""; };
+  r.readAsText(f);
+});
+$("cReset").addEventListener("click", () => { if (armed === "reset"){ S = fresh(); armed = null; save(); toast("すべて消しました"); } else armed = "reset"; render(); });
+
+/* ---------- 起動：開くたびに自動で読み込む ---------- */
+(async () => {
+  const d = await loadState();
+  S = d ? Object.assign(fresh(), d) : fresh();
+  if (!d) save();
+  if (navigator.storage && navigator.storage.persist) { try { await navigator.storage.persist(); } catch(_){} }
+  render();
+  if ("serviceWorker" in navigator && location.protocol !== "file:") navigator.serviceWorker.register("sw.js").catch(() => {});
+})();
+document.addEventListener("visibilitychange", () => { if (!document.hidden && S) render(); });
+</script>
+</body>
+</html>

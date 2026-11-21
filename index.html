@@ -47,7 +47,7 @@ header.top .sub{background:var(--white);border:2px solid var(--ink);padding:0 8p
 .main .per{align-self:flex-start;font-weight:800;font-size:.82rem;background:var(--white);border:2px solid var(--ink);padding:2px 8px}
 .main .per b{font-family:var(--f-num);font-size:1.2rem;letter-spacing:.03em;font-weight:400}
 .pic{position:relative;align-self:end;appearance:none;border:0;background:none;padding:0;cursor:pointer;-webkit-tap-highlight-color:transparent}
-.pic img{width:146px;height:146px;display:block;margin-left:-14px;mix-blend-mode:multiply}
+.pic img{width:146px;height:146px;display:block;margin-left:-14px;filter:drop-shadow(2px 2px 0 rgba(17,17,17,.25))}
 .pic img.pop{animation:pop .35s ease-out}
 @keyframes pop{0%{transform:scale(.6) rotate(-8deg)}70%{transform:scale(1.08) rotate(3deg)}100%{transform:none}}
 .say{grid-column:1/-1;position:relative;margin:0 12px 12px;background:var(--white);border:3px solid var(--ink);border-radius:16px;padding:8px 12px;font-weight:800;font-size:.9rem;line-height:1.45;box-shadow:3px 3px 0 var(--ink)}
@@ -140,7 +140,7 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid 
         <div class="big" id="hLeft">—</div>
         <span class="per">1日あたり <b id="hPerDay">—</b>（<span id="hDays"></span>）</span>
       </div>
-      <button type="button" class="pic" id="heroBtn" aria-label="ヒーローを交代する"><img id="heroImg" src="hero/hero2_sq.jpg" alt="今日のヒーロー" width="146" height="146"></button>
+      <button type="button" class="pic" id="heroBtn" aria-label="ヒーローを交代する"><img id="heroImg" src="hero/hero2_sq.png" alt="今日のヒーロー" width="146" height="146"></button>
       <p class="say" id="heroSay" aria-live="polite"></p>
       <div class="meterbox">
         <div class="meter" id="hMeter" aria-hidden="true"></div>
@@ -284,7 +284,7 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid 
       <p class="note">機種変更やスマホの故障に備えて、月に1回くらい書き出しておくと安心です。書き出したファイルは、このアプリの中のデータと同じなので、人に送らないでください。</p>
       <button class="btn danger" type="button" id="cReset">すべてのデータを消す</button>
     </section>
-    <p class="note" style="text-align:center">年間家計簿 v2 ・ データはこのスマホの中だけに保存されます</p>
+    <p class="note" style="text-align:center">年間家計簿 v3 ・ データはこのスマホの中だけに保存されます</p>
   </section>
 </div>
 
@@ -376,7 +376,7 @@ const yen = n => (n < 0 ? "−¥" : "¥") + Math.abs(Math.round(n)).toLocaleStri
 const CAT = { need:["生活必需品","var(--need)"], fun:["娯楽費","var(--fun)"], save:["蓄財","var(--save)"] };
 
 /* ---------- ヒーロー：日替わりで1人。家計の状態でポーズとセリフが変わる。タップで交代 ---------- */
-// 画像：hero/heroN_{sq=決めポーズ, good=親指, pinch=焦り, down=落ち込み}.jpg
+// 画像：hero/heroN_{sq=決めポーズ, good=親指, pinch=焦り, down=落ち込み}.png（背景は透明）
 const POSE = { ok:"sq", mid:"good", low:"pinch", over:"down" };
 const STATE_NAME = { ok:"余裕あり", mid:"節約中", low:"ピンチ", over:"使いすぎ" };
 const HEROES = [
@@ -427,7 +427,7 @@ function drawHero(c, anim){
   const mood = ready ? moodOf(c) : "ok";
   const h = HEROES[heroIdx];
   const img = $("heroImg"), say = $("heroSay"), st = $("hState");
-  const src = "hero/hero" + h.n + "_" + POSE[mood] + ".jpg";
+  const src = "hero/hero" + h.n + "_" + POSE[mood] + ".png";
   if (img.getAttribute("src") !== src) img.setAttribute("src", src);
   st.hidden = !ready; st.textContent = STATE_NAME[mood]; st.className = "state " + mood;
   const lines = h.say[mood];

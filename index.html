@@ -237,7 +237,7 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid 
       <h2>蓄財の計画</h2>
       <form id="pForm" autocomplete="off">
         <div class="grid2">
-          <label class="f">毎月の積立ペース（円）<input type="number" id="pPace" inputmode="numeric" min="0" step="1"></label>
+          <label class="f">毎月の積立ペース（ボーナス分も含めた1年の目標を12で割った額・円）<input type="number" id="pPace" inputmode="numeric" min="0" step="1"></label>
           <label class="f">ボーナスから回したい額（年・円）<input type="number" id="pBonus" inputmode="numeric" min="0" step="1"></label>
         </div>
         <p class="note" id="pNote"></p>
@@ -284,7 +284,7 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid 
       <p class="note">機種変更やスマホの故障に備えて、月に1回くらい書き出しておくと安心です。書き出したファイルは、このアプリの中のデータと同じなので、人に送らないでください。</p>
       <button class="btn danger" type="button" id="cReset">すべてのデータを消す</button>
     </section>
-    <p class="note" style="text-align:center">年間家計簿 v3 ・ データはこのスマホの中だけに保存されます</p>
+    <p class="note" style="text-align:center">年間家計簿 v4 ・ データはこのスマホの中だけに保存されます</p>
   </section>
 </div>
 
@@ -345,7 +345,8 @@ function calc(){
   const t = today0(), raw = indexOfDate(t), cur = Math.min(11, Math.max(0, raw));
   const income = sum(S.salary, x => x.amount) + sum(S.bonuses, x => x.amount);
   const pace = Number(S.settings.pace) || 0, bPlan = Number(S.settings.bonusSavePlan) || 0;
-  const fixed = (sum(S.fixedMonthly, x => x.amount) + pace) * 12 + sum(S.fixedYearly, x => x.amount);
+  const monthly = Math.max(0, Math.ceil((pace * 12 - bPlan) / 12));   // ボーナスから回す分を引いた、毎月の投資額
+  const fixed = (sum(S.fixedMonthly, x => x.amount) + monthly) * 12 + sum(S.fixedYearly, x => x.amount);
   const free = income - fixed - bPlan;
   const spentIn = i => { const p = period(i); return sum(S.expenses.filter(e => { const d = parse(e.date); return d >= p.start && d <= p.end; }), e => e.amount); };
   let spentBefore = 0; for (let i = 0; i < cur; i++) spentBefore += spentIn(i);
@@ -362,12 +363,12 @@ function calc(){
   const extraSave = sum(yearSave, e => e.amount);
   const extraDone = sum(yearSave.filter(e => parse(e.date) <= t), e => e.amount);
   const bonusSaved = sum(S.bonusSaves, x => x.amount);
-  const goal = pace * 12 + bPlan;
-  const forecast = goal + extraSave;
+  const goal = Math.max(pace * 12, bPlan);
+  const forecast = monthly * 12 + bPlan + extraSave;
   const monthsDone = raw < 0 ? 0 : raw > 11 ? 12 : cur;   // 20日を過ぎた月の積立は回せたとみなす
-  const done = pace * monthsDone + extraDone + bonusSaved;
+  const done = monthly * monthsDone + extraDone + bonusSaved;
   return { t, raw, cur, p, income, fixed, free, spentBefore, budget, curList, spent, left, daysLeft, perDay, extraSave, bonusSaved, goal, forecast, done,
-    toGoal: Math.max(0, goal - done), bonusLeft: Math.max(0, bPlan - bonusSaved), pace, bPlan, spentIn };
+    toGoal: Math.max(0, goal - done), bonusLeft: Math.max(0, bPlan - bonusSaved), pace, monthly, bPlan, spentIn };
 }
 
 /* ---------- 表示 ---------- */
@@ -469,9 +470,9 @@ function renderHome(c){
   $("hLegend").innerHTML = Object.keys(by).map(k => `<span style="--c:${CAT[k][1]}">${CAT[k][0]} <span class="num">${yen(by[k])}</span></span>`).join("");
   $("hYearTitle").textContent = "今年の蓄財（" + period(0).label + "月分〜" + (period(11).year !== period(0).year ? "翌年" : "") + period(11).label + "月分）";
   $("hForecast").textContent = yen(c.forecast);
-  $("hForecastSub").textContent = "毎月の積立 " + yen(c.pace) + "×12 ＋ ボーナスから " + yen(c.bPlan) + " ＋ 追加の蓄財 " + yen(c.extraSave);
+  $("hForecastSub").textContent = "毎月の投資 " + yen(c.monthly) + "×12 ＋ ボーナスから " + yen(c.bPlan) + " ＋ 追加の蓄財 " + yen(c.extraSave);
   $("hGoal").textContent = yen(c.goal);
-  $("hGoalSub").textContent = "毎月 " + yen(c.pace) + " ペース×12 ＋ ボーナスから " + yen(c.bPlan);
+  $("hGoalSub").textContent = "毎月 " + yen(c.pace) + " ペース×12（うちボーナスから " + yen(c.bPlan) + "）";
   $("hToGoal").textContent = yen(c.toGoal);
   $("hToGoalSub").textContent = "これまでに回せた額 " + yen(c.done) + (c.goal ? "（" + Math.round(c.done / c.goal * 100) + "%）" : "");
   $("hGoalBar").style.width = (c.goal ? Math.min(100, c.done / c.goal * 100) : 0) + "%";
@@ -514,9 +515,9 @@ function renderFixed(c){
   $("fTotal").textContent = "年間 " + yen(c.fixed) + "（積立を含む）";
   if (document.activeElement !== $("pPace")) $("pPace").value = S.settings.pace || "";
   if (document.activeElement !== $("pBonus")) $("pBonus").value = S.settings.bonusSavePlan || "";
-  $("pNote").textContent = "今年の目標 ＝ " + yen(c.pace) + "×12 ＋ " + yen(c.bPlan) + " ＝ " + yen(c.goal) + "。毎月の積立は固定費として予算から先に引きます。";
+  $("pNote").textContent = "今年の目標 ＝ " + yen(c.pace) + "×12 ＝ " + yen(c.goal) + "。そのうちボーナスから " + yen(c.bPlan) + " 回すので、毎月の投資は（" + yen(c.goal) + " − " + yen(c.bPlan) + "）÷12 ＝ " + yen(c.monthly) + "（1円未満は切り上げ）。毎月の投資は固定費として予算から先に引きます。";
   const row = (x, kind) => `<li><span class="d"></span><span class="t">${esc(x.name)}</span><span class="a">${yen(x.amount)} <button type="button" class="toggle" style="color:var(--warn)" data-fdel="${kind}:${x.id}">${armed === kind + x.id ? "本当に消す" : "消す"}</button></span></li>`;
-  $("fMonthly").innerHTML = (S.fixedMonthly.length ? S.fixedMonthly.map(x => row(x, "m")).join("") : `<li class="empty" style="display:block">まだありません</li>`) + `<li><span></span><span class="t"><b>毎月の合計（積立を含む）</b></span><span class="a">${yen(sum(S.fixedMonthly, x => x.amount) + c.pace)}</span></li>`;
+  $("fMonthly").innerHTML = (S.fixedMonthly.length ? S.fixedMonthly.map(x => row(x, "m")).join("") : `<li class="empty" style="display:block">まだありません</li>`) + `<li><span></span><span class="t"><b>毎月の合計（積立を含む）</b></span><span class="a">${yen(sum(S.fixedMonthly, x => x.amount) + c.monthly)}</span></li>`;
   $("fYearly").innerHTML = S.fixedYearly.length ? S.fixedYearly.map(x => row(x, "y")).join("") : `<li class="empty" style="display:block">まだありません</li>`;
 }
 function renderSettings(c){

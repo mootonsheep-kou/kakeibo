@@ -76,6 +76,10 @@ header.top .sub{background:var(--white);border:2px solid var(--ink);padding:0 8p
 .line.goal .v{color:var(--blue)} .line.warn .v{color:var(--red)}
 .prog{grid-column:1/-1;height:14px;border:3px solid var(--ink);background:var(--paper)}
 .prog i{display:block;height:100%;background:repeating-linear-gradient(-45deg,var(--yellow) 0 6px,var(--red) 6px 12px)}
+.pacebtns{grid-column:1/-1;display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:4px}
+form.pacebtns{flex-direction:row;flex-wrap:nowrap}
+.pacebtns input{flex:1 1 auto;width:auto}
+.pacebtns button{flex:none}
 .prog.gold i{background:repeating-linear-gradient(-45deg,var(--yellow) 0 6px,var(--blue) 6px 12px)}
 ul.list{list-style:none;margin:0;padding:0}
 ul.list li{display:grid;grid-template-columns:auto 1fr auto;gap:4px 10px;align-items:center;padding:9px 0;border-bottom:2px dashed var(--ink);font-size:.9rem}
@@ -153,6 +157,10 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid 
       <div class="line goal"><span>今年回せそうな額（見込み）</span><span class="v" id="hForecast"></span><span class="s" id="hForecastSub"></span></div>
       <div class="line"><span>今年の目標</span><span class="v" id="hGoal"></span><span class="s" id="hGoalSub"></span></div>
       <div class="line warn"><span>目標まであと</span><span class="v" id="hToGoal"></span><span class="s" id="hToGoalSub"></span><div class="prog"><i id="hGoalBar"></i></div></div>
+      <div class="line" id="hPaceLine"><span>今月の積立（<span id="hPaceMonth"></span>）</span><span class="v" id="hPaceAmt"></span><span class="s" id="hPaceSub"></span>
+        <div class="pacebtns"><button type="button" class="toggle kari" id="hPaceChk" aria-pressed="false">予定どおり積み立てた</button><button type="button" class="toggle kari" id="hPaceEdit">金額を直す</button></div>
+        <form class="pacebtns" id="hPaceForm" hidden><input type="number" id="hPaceInput" inputmode="numeric" min="0" step="1" aria-label="実際に積み立てた額（円）" placeholder="積み立てた額（円）"><button type="submit" class="toggle jitsu">入れる</button></form>
+        <span class="s" id="hPaceOld"></span></div>
       <div class="line"><span>ボーナスから、あと回す額</span><span class="v" id="hBonusLeft"></span><span class="s" id="hBonusSub"></span><div class="prog gold"><i id="hBonusBar"></i></div></div>
     </section>
     <section class="sheet">
@@ -284,7 +292,7 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid 
       <p class="note">機種変更やスマホの故障に備えて、月に1回くらい書き出しておくと安心です。書き出したファイルは、このアプリの中のデータと同じなので、人に送らないでください。</p>
       <button class="btn danger" type="button" id="cReset">すべてのデータを消す</button>
     </section>
-    <p class="note" style="text-align:center">年間家計簿 v4 ・ データはこのスマホの中だけに保存されます</p>
+    <p class="note" style="text-align:center">年間家計簿 v6 ・ データはこのスマホの中だけに保存されます</p>
   </section>
 </div>
 
@@ -319,7 +327,7 @@ function fresh(){
   return { version:1,
     settings:{ startYear: t.getDate() >= 21 && t.getMonth() === 11 ? t.getFullYear() + 1 : t.getFullYear(), startMonth: lbl, pace:0, bonusSavePlan:0 },
     salary: Array.from({length:12}, () => ({amount:0, actual:false})),
-    bonuses: [], fixedMonthly: [], fixedYearly: [], expenses: [], bonusSaves: [] };
+    bonuses: [], fixedMonthly: [], fixedYearly: [], expenses: [], bonusSaves: [], paceChecks: {} };
 }
 let S = null;
 
@@ -334,6 +342,7 @@ function period(i){ // i = この1年の何か月目か（0〜11）
   const start = new Date(end.getFullYear(), end.getMonth() - 1, 21);
   return { i, start, end, label: end.getMonth() + 1, year: end.getFullYear() };
 }
+const pkey = p => p.year + "-" + pad(p.label);   // 積立チェックの目印（何年何月分か）
 function indexOfDate(d){ // その日が何か月目か。1年の外なら -1 か 12
   for (let i = 0; i < 12; i++){ const p = period(i); if (d >= p.start && d <= p.end) return i; }
   return d < period(0).start ? -1 : 12;
@@ -365,10 +374,18 @@ function calc(){
   const bonusSaved = sum(S.bonusSaves, x => x.amount);
   const goal = Math.max(pace * 12, bPlan);
   const forecast = monthly * 12 + bPlan + extraSave;
-  const monthsDone = raw < 0 ? 0 : raw > 11 ? 12 : cur;   // 20日を過ぎた月の積立は回せたとみなす
-  const done = monthly * monthsDone + extraDone + bonusSaved;
+  // 積立：チェックを入れた月だけ「回せた」。足りない分（多い分）は、残りの月で割って予定の額に足す（引く）
+  const T = Math.max(0, pace * 12 - bPlan), chk = S.paceChecks || {};
+  const plan = [], paid = []; let acc = 0;
+  for (let i = 0; i < 12; i++){
+    const v = chk[pkey(period(i))];
+    plan[i] = Math.max(0, Math.ceil((T - acc) / (12 - i)));
+    paid[i] = (v === undefined || v === false || v === null) ? null : (typeof v === "number" ? v : plan[i]);
+    acc += paid[i] || 0;
+  }
+  const done = acc + extraDone + bonusSaved;
   return { t, raw, cur, p, income, fixed, free, spentBefore, budget, curList, spent, left, daysLeft, perDay, extraSave, bonusSaved, goal, forecast, done,
-    toGoal: Math.max(0, goal - done), bonusLeft: Math.max(0, bPlan - bonusSaved), pace, monthly, bPlan, spentIn };
+    toGoal: Math.max(0, goal - done), bonusLeft: Math.max(0, bPlan - bonusSaved), pace, monthly, plan, paid, bPlan, spentIn };
 }
 
 /* ---------- 表示 ---------- */
@@ -476,6 +493,29 @@ function renderHome(c){
   $("hToGoal").textContent = yen(c.toGoal);
   $("hToGoalSub").textContent = "これまでに回せた額 " + yen(c.done) + (c.goal ? "（" + Math.round(c.done / c.goal * 100) + "%）" : "");
   $("hGoalBar").style.width = (c.goal ? Math.min(100, c.done / c.goal * 100) : 0) + "%";
+  const cp = period(c.cur), pd = c.paid[c.cur], pl = c.plan[c.cur], on = pd !== null;
+  $("hPaceLine").hidden = !c.monthly && !on;
+  $("hPaceMonth").textContent = cp.label + "月分";
+  $("hPaceAmt").textContent = yen(on ? pd : pl);
+  let sub;
+  if (on){
+    sub = "積み立てた額 " + yen(pd) + "（予定 " + yen(pl) + "）";
+    if (pd < pl) sub += "。足りない " + yen(pl - pd) + " は、来月から残りの月に分けて上乗せします";
+    else if (pd > pl) sub += "。多い " + yen(pd - pl) + " の分、来月からの予定が少し減ります";
+  } else {
+    sub = "予定 " + yen(pl);
+    if (pl > c.monthly) sub += "（前の月までの足りない分を上乗せ。ふつうは " + yen(c.monthly) + "）";
+    else if (pl < c.monthly) sub += "（前の月までに多く積み立てた分を差し引き。ふつうは " + yen(c.monthly) + "）";
+    sub += "。積み立てたらボタンを押してください";
+  }
+  $("hPaceSub").textContent = sub;
+  $("hPaceChk").textContent = on ? "積み立てた ✓（外す）" : "予定どおり積み立てた";
+  $("hPaceChk").className = "toggle " + (on ? "jitsu" : "kari");
+  $("hPaceChk").setAttribute("aria-pressed", on ? "true" : "false");
+  $("hPaceChk").dataset.key = pkey(cp);
+  $("hPaceForm").dataset.key = pkey(cp);
+  const old = []; for (let i = 0; i < c.cur; i++){ if (c.paid[i] === null) old.push(i); }
+  $("hPaceOld").innerHTML = old.length ? "前の月でチェックがない（今月の予定に上乗せ中）：" + old.map(i => `<button type="button" class="toggle kari" data-pi="${i}">${period(i).label}月分 →予定どおり積み立てた</button>`).join(" ") : "";
   $("hBonusLeft").textContent = yen(c.bonusLeft);
   const nb = S.bonuses.filter(b => !b.actual)[0];
   $("hBonusSub").textContent = "予定 " + yen(c.bPlan) + " ／ 回した額 " + yen(c.bonusSaved) + (nb ? "（次は" + nb.name + "）" : "");
@@ -541,6 +581,11 @@ function go(name){
   render(); window.scrollTo(0, 0);
 }
 document.querySelectorAll(".tabbar button").forEach(b => b.addEventListener("click", () => go(b.dataset.go)));
+const setPaid = (k, v) => { if (!S.paceChecks) S.paceChecks = {}; if (v === null) delete S.paceChecks[k]; else S.paceChecks[k] = v; save(); render(); };
+$("hPaceChk").addEventListener("click", e => { const k = e.currentTarget.dataset.key; if (!k) return; const c = calc(); if (c.paid[c.cur] !== null){ setPaid(k, null); toast("チェックを外しました"); } else { setPaid(k, c.plan[c.cur]); toast("積み立てたことにしました"); } });
+$("hPaceEdit").addEventListener("click", () => { const f = $("hPaceForm"), c = calc(); f.hidden = !f.hidden; if (!f.hidden){ $("hPaceInput").value = c.paid[c.cur] !== null ? c.paid[c.cur] : c.plan[c.cur]; $("hPaceInput").focus(); } });
+$("hPaceForm").addEventListener("submit", e => { e.preventDefault(); const k = e.currentTarget.dataset.key, v = Math.round(Number($("hPaceInput").value)); if (!k || !(v >= 0)) { toast("金額を入れてください"); return; } $("hPaceForm").hidden = true; setPaid(k, v); toast("積み立てた額を入れました"); });
+$("hPaceOld").addEventListener("click", e => { const i = e.target.dataset.pi; if (i == null) return; const c = calc(); setPaid(pkey(period(Number(i))), c.plan[Number(i)]); toast("積み立てたことにしました"); });
 $("heroBtn").addEventListener("click", () => { heroIdx = (heroIdx + 1) % HEROES.length; heroLine++; drawHero(calc(), true); });
 
 // 支出
